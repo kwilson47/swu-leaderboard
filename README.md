@@ -57,6 +57,23 @@ DATABASE_URL="mongodb://username:password@host:port/database?authSource=admin"
 
 Make sure to use the same database URL as your Discord bot.
 
+## Deployment to AWS Amplify
+
+To deploy this application to AWS Amplify:
+
+1. Push your code to a GitHub repository
+2. Set up a new Amplify app and connect it to your repository
+3. Set up the required environment variables in Amplify's environment variables section:
+   - `DATABASE_URL` or `MONGODB_URI` with your MongoDB connection string
+
+### Important Notes for Deployment
+
+- Always use environment variables in Amplify console; do not rely on `.env` files for production
+- Make sure your MongoDB connection is accessible from AWS (check network/firewall settings)
+- For MongoDB Atlas, make sure to:
+  - Whitelist Amplify's IP addresses or use network access 0.0.0.0/0 for testing
+  - Use a connection string that includes your username, password, and database name
+
 ## Development
 
 - The web app reads directly from the bot's original data format
