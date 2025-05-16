@@ -2,6 +2,10 @@ import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { getLeaderboard } from '../../../lib/tournamentService'
 
+// Force dynamic rendering to get fresh data on each request
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export const metadata = {
   title: "Leaderboard | SWU Tournament Dashboard",
   description: "View the Star Wars: Unlimited tournament leaderboard rankings",

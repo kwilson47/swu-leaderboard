@@ -4,6 +4,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { getTournaments } from '../../../lib/tournamentService'
 import { ObjectId } from 'mongodb'
 
+// Force dynamic rendering to get fresh data on each request
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 // Use type instead of interface to avoid conflicts with imported types
 type TournamentDisplay = {
   _id: string | ObjectId;
@@ -25,6 +29,7 @@ export const metadata = {
 }
 
 export default async function TournamentsPage() {
+  // Add cache-busting query parameter using current timestamp
   const tournaments = await getTournaments()
   
   // Helper function to find the winner of a tournament

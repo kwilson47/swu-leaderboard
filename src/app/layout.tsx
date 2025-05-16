@@ -2,6 +2,10 @@ import './globals.css'
 import { Inter } from 'next/font/google'
 import Link from 'next/link'
 
+// Force dynamic rendering for the entire app
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata = {

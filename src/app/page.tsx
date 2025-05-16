@@ -3,6 +3,10 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { getTournamentCount, getPlayerCount, getRecentTournaments, getLeaderboard } from '../../lib/tournamentService'
 import { ObjectId } from 'mongodb'
 
+// Force dynamic rendering to get fresh data on each request
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 export const metadata = {
   title: 'SWU Tournament Dashboard',
   description: 'Track tournament results, player statistics, and match outcomes',
