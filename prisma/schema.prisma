@@ -1,0 +1,94 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model Tournament {
+  id          String     @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  guildId     String
+  guildName   String?
+  channelId   String
+  date        DateTime   @default(now())
+  playerCount Int
+  rounds      Round[]
+  standings   Standing[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model Round {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  tournamentId String   @db.ObjectId
+  tournament   Tournament @relation(fields: [tournamentId], references: [id])
+  number       Int
+  status       String
+  matches      Match[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Match {
+  id               String  @id @default(auto()) @map("_id") @db.ObjectId
+  roundId          String  @db.ObjectId
+  round            Round   @relation(fields: [roundId], references: [id])
+  player1Id        String
+  player2Id        String?
+  player1Score     Int?
+  player2Score     Int?
+  winnerId         String?
+  isTie            Boolean @default(false)
+  isBye            Boolean @default(false)
+  isIntentionalDraw Boolean @default(false)
+  status           String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model Player {
+  id                 String    @id @default(auto()) @map("_id") @db.ObjectId
+  discordId          String    @unique
+  username           String
+  displayName        String?
+  avatarUrl          String?
+  standings          Standing[]
+  matchWins          Int       @default(0)
+  matchLosses        Int       @default(0)
+  matchDraws         Int       @default(0)
+  gameWins           Int       @default(0)
+  gameLosses         Int       @default(0)
+  gameDraws          Int       @default(0)
+  tournamentsPlayed  Int       @default(0)
+  tournamentsWon     Int       @default(0)
+  lastActive         DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+}
+
+model Standing {
+  id                       String    @id @default(auto()) @map("_id") @db.ObjectId
+  tournamentId             String    @db.ObjectId
+  tournament               Tournament @relation(fields: [tournamentId], references: [id])
+  playerId                 String    @db.ObjectId
+  player                   Player    @relation(fields: [playerId], references: [id])
+  rank                     Int
+  matchWins                Int       @default(0)
+  matchLosses              Int       @default(0)
+  matchDraws               Int       @default(0)
+  gameWins                 Int       @default(0)
+  gameLosses               Int       @default(0)
+  gameDraws                Int       @default(0)
+  points                   Int       @default(0)
+  opponentMatchWinPercentage Float?
+  gameWinPercentage        Float?
+  opponentGameWinPercentage Float?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+} 
