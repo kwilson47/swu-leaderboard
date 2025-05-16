@@ -53,6 +53,11 @@ interface OpponentRecord {
   [key: string]: any;
 }
 
+// Extend the global namespace to include our username map
+declare global {
+  var _usernameMap: Map<string, string> | undefined;
+}
+
 // Get the total count of tournaments
 export async function getTournamentCount() {
   const client = await clientPromise;
@@ -118,6 +123,17 @@ export async function getTournaments() {
     .sort({ date: -1 })
     .toArray();
   
+  // Anonymize player usernames for demo purposes
+  tournaments.forEach(tournament => {
+    if (tournament.players && Array.isArray(tournament.players)) {
+      tournament.players.forEach(player => {
+        if (player.username) {
+          player.username = anonymizeUsername(player.username);
+        }
+      });
+    }
+  });
+  
   return tournaments as Tournament[];
 }
 
@@ -175,7 +191,7 @@ export async function getPlayers() {
     
     return players.map(player => ({
       discordId: player._id,
-      username: player.username,
+      username: anonymizeUsername(player.username || 'Unknown Player'),
       matchWins: player.matchWins || 0,
       matchLosses: player.matchLosses || 0,
       matchDraws: player.matchDraws || 0,
@@ -210,6 +226,17 @@ export async function getPlayerById(discordId: string) {
     
     // Get player data from the first tournament
     const playerData = tournaments[0].players.find((p: Player) => p.discordId === discordId);
+    
+    // Anonymize all player usernames in tournaments
+    tournaments.forEach(tournament => {
+      if (tournament.players && Array.isArray(tournament.players)) {
+        tournament.players.forEach(player => {
+          if (player.username) {
+            player.username = anonymizeUsername(player.username);
+          }
+        });
+      }
+    });
     
     // Extract and aggregate stats
     let totalMatchWins = 0;
@@ -256,7 +283,7 @@ export async function getPlayerById(discordId: string) {
     
     return {
       discordId,
-      username: playerData?.username || 'Unknown Player',
+      username: anonymizeUsername(playerData?.username || 'Unknown Player'),
       matchWins: totalMatchWins,
       matchLosses: totalMatchLosses,
       matchDraws: totalMatchDraws,
@@ -292,6 +319,15 @@ export async function getPlayerHeadToHead(discordId: string) {
     tournaments.forEach((tournament: Tournament) => {
       if (!tournament.rounds) return;
       
+      // Anonymize player usernames
+      if (tournament.players && Array.isArray(tournament.players)) {
+        tournament.players.forEach(player => {
+          if (player.username) {
+            player.username = anonymizeUsername(player.username);
+          }
+        });
+      }
+      
       tournament.rounds.forEach((round: Round) => {
         if (!round.matches) return;
         
@@ -315,11 +351,11 @@ export async function getPlayerHeadToHead(discordId: string) {
           const opponent = tournament.players.find((p: Player) => p.discordId === opponentId);
           if (!opponent) return;
           
-          // Initialize opponent record if not exists
+          // Add opponent's username and record if it hasn't been added yet
           if (!opponentRecords[opponentId]) {
             opponentRecords[opponentId] = {
               discordId: opponentId,
-              username: opponent.username,
+              username: opponent.username || 'Unknown Player',
               matchWins: 0,
               matchLosses: 0,
               matchDraws: 0,
@@ -349,12 +385,21 @@ export async function getPlayerHeadToHead(discordId: string) {
       });
     });
     
-    // Convert to array and sort by most games played
+    // Convert records to array for sorting
     return Object.values(opponentRecords)
-      .sort((a: OpponentRecord, b: OpponentRecord) => 
-        (b.matchWins + b.matchLosses + b.matchDraws) - 
-        (a.matchWins + a.matchLosses + a.matchDraws)
-      );
+      .map(record => ({
+        ...record,
+        // Ensure username is anonymized for display
+        username: anonymizeUsername(record.username)
+      }))
+      .sort((a, b) => {
+        // Sort by match wins first
+        if (a.matchWins !== b.matchWins) {
+          return b.matchWins - a.matchWins;
+        }
+        // Then by username
+        return a.username.localeCompare(b.username);
+      });
   } catch (error) {
     console.error('Error fetching head-to-head records:', error);
     return [];
@@ -368,12 +413,9 @@ export async function getLeaderboard() {
   
   try {
     // Get all tournaments
-    const tournaments = await db
-      .collection('tournaments')
-      .find({})
-      .toArray();
+    const tournaments = await db.collection('tournaments').find({}).toArray();
     
-    // Create a map to track player scores and stats
+    // Create player map for aggregating stats
     const playerMap: Record<string, {
       discordId: string;
       username: string;
@@ -402,7 +444,7 @@ export async function getLeaderboard() {
         if (!playerMap[player.discordId]) {
           playerMap[player.discordId] = {
             discordId: player.discordId,
-            username: player.username,
+            username: anonymizeUsername(player.username),
             leaderboardPoints: 0,
             tournamentsPlayed: 0,
             firstPlace: 0,
@@ -417,66 +459,93 @@ export async function getLeaderboard() {
           };
         }
         
-        // Increment tournaments played
-        playerMap[player.discordId].tournamentsPlayed++;
+        // Increment tournaments played counter
+        playerMap[player.discordId].tournamentsPlayed += 1;
         
-        // Add points based on placement
-        if (player.rank === 1) {
-          playerMap[player.discordId].leaderboardPoints += 5;
-          playerMap[player.discordId].firstPlace++;
-        } else if (player.rank === 2) {
-          playerMap[player.discordId].leaderboardPoints += 3;
-          playerMap[player.discordId].secondPlace++;
-        } else if (player.rank === 3) {
-          playerMap[player.discordId].leaderboardPoints += 1;
-          playerMap[player.discordId].thirdPlace++;
-        }
-        
-        // Accumulate match and game stats
+        // Add stats
         playerMap[player.discordId].matchWins += player.matchWins || 0;
         playerMap[player.discordId].matchLosses += player.matchLosses || 0;
         playerMap[player.discordId].matchDraws += player.matchDraws || 0;
         playerMap[player.discordId].gameWins += player.gameWins || 0;
         playerMap[player.discordId].gameLosses += player.gameLosses || 0;
         playerMap[player.discordId].gameDraws += player.gameDraws || 0;
+        
+        // Add points based on rank
+        if (player.rank === 1) {
+          // 5 points for 1st place
+          playerMap[player.discordId].leaderboardPoints += 5;
+          playerMap[player.discordId].firstPlace += 1;
+        }
+        else if (player.rank === 2) {
+          // 3 points for 2nd place
+          playerMap[player.discordId].leaderboardPoints += 3;
+          playerMap[player.discordId].secondPlace += 1;
+        }
+        else if (player.rank === 3) {
+          // 1 point for 3rd place
+          playerMap[player.discordId].leaderboardPoints += 1;
+          playerMap[player.discordId].thirdPlace += 1;
+        }
       });
     });
     
-    // Convert to array and sort by leaderboard points
+    // Convert to array and sort by points, ties broken by placement finishes
     const leaderboard = Object.values(playerMap).sort((a, b) => {
-      // First sort by points (descending)
-      if (b.leaderboardPoints !== a.leaderboardPoints) {
+      // Sort by total points first
+      if (a.leaderboardPoints !== b.leaderboardPoints) {
         return b.leaderboardPoints - a.leaderboardPoints;
       }
       
-      // Tiebreaker 1: First place finishes
-      if (b.firstPlace !== a.firstPlace) {
+      // Break ties by number of first place finishes
+      if (a.firstPlace !== b.firstPlace) {
         return b.firstPlace - a.firstPlace;
       }
       
-      // Tiebreaker 2: Second place finishes
-      if (b.secondPlace !== a.secondPlace) {
+      // Break ties by number of second place finishes
+      if (a.secondPlace !== b.secondPlace) {
         return b.secondPlace - a.secondPlace;
       }
       
-      // Tiebreaker 3: Third place finishes
-      if (b.thirdPlace !== a.thirdPlace) {
+      // Break ties by number of third place finishes
+      if (a.thirdPlace !== b.thirdPlace) {
         return b.thirdPlace - a.thirdPlace;
       }
       
-      // Tiebreaker 4: Match win percentage
-      const aMatchTotal = a.matchWins + a.matchLosses + a.matchDraws;
-      const bMatchTotal = b.matchWins + b.matchLosses + b.matchDraws;
+      // If still tied, break by win percentage
+      const aTotal = a.matchWins + a.matchLosses + a.matchDraws;
+      const bTotal = b.matchWins + b.matchLosses + b.matchDraws;
       
-      const aWinPct = aMatchTotal > 0 ? (a.matchWins / aMatchTotal) : 0;
-      const bWinPct = bMatchTotal > 0 ? (b.matchWins / bMatchTotal) : 0;
+      const aWinPercentage = aTotal > 0 ? a.matchWins / aTotal : 0;
+      const bWinPercentage = bTotal > 0 ? b.matchWins / bTotal : 0;
       
-      return bWinPct - aWinPct;
+      return bWinPercentage - aWinPercentage;
     });
     
     return leaderboard;
   } catch (error) {
-    console.error('Error fetching leaderboard:', error);
+    console.error('Error creating leaderboard:', error);
     return [];
   }
+}
+
+// Helper function to anonymize usernames for demo purposes
+// Keep "Keith W" but replace others with "User A", "User B", etc.
+function anonymizeUsername(username: string): string {
+  // Keep Keith W as is
+  if (username.includes("Keith W")) {
+    return username;
+  }
+  
+  // Create a map to consistently assign the same anonymous name to the same user
+  if (!global._usernameMap) {
+    global._usernameMap = new Map<string, string>();
+  }
+  
+  if (!global._usernameMap.has(username)) {
+    const userLetters = ["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"];
+    const index = global._usernameMap.size % userLetters.length;
+    global._usernameMap.set(username, `User ${userLetters[index]}`);
+  }
+  
+  return global._usernameMap.get(username) || username;
 } 
